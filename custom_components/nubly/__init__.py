@@ -1,6 +1,7 @@
 """The Nubly integration."""
 
 import json
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -11,8 +12,11 @@ from .const import (
     CONF_LIGHT_ENTITY,
     CONF_MEDIA_ENTITY,
     CONF_ROOM_NAME,
+    CONF_WEATHER_ENTITY,
     DOMAIN,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -58,6 +62,11 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
         },
         "screensaver_timeout_seconds": 30,
     }
+
+    weather_entity = data.get(CONF_WEATHER_ENTITY)
+    _LOGGER.info("WEATHER CONFIG: entity_id = %s", weather_entity)
+    if weather_entity:
+        payload["weather"] = {"entity_id": weather_entity}
 
     await hass.services.async_call(
         "mqtt",

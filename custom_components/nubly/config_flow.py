@@ -3,6 +3,7 @@
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow
+from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
 from .const import (
     CONF_DEVICE_ID,
@@ -10,6 +11,7 @@ from .const import (
     CONF_LIGHT_ENTITY,
     CONF_MEDIA_ENTITY,
     CONF_ROOM_NAME,
+    CONF_WEATHER_ENTITY,
     DOMAIN,
 )
 
@@ -20,6 +22,9 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_MEDIA_ENTITY): str,
         vol.Required(CONF_LIGHT_ENTITY): str,
         vol.Required(CONF_LIGHT_DISPLAY_NAME): str,
+        vol.Optional(CONF_WEATHER_ENTITY): EntitySelector(
+            EntitySelectorConfig(domain="weather"),
+        ),
     }
 )
 
