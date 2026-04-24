@@ -75,6 +75,13 @@ class NublyConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: ZeroconfServiceInfo
     ):
         """Handle a device announced via mDNS/zeroconf."""
+        _LOGGER.warning(
+            "NUBLY HA: async_step_zeroconf called name=%s type=%s host=%s port=%s",
+            getattr(discovery_info, "name", None),
+            getattr(discovery_info, "type", None),
+            discovery_info.host,
+            discovery_info.port,
+        )
         host = discovery_info.host
         port = discovery_info.port
         props = {
