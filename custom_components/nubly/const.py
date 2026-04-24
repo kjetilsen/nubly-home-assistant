@@ -8,6 +8,16 @@ CONF_MEDIA_ENTITY = "media_entity"
 CONF_LIGHT_ENTITY = "light_entity"
 CONF_LIGHT_DISPLAY_NAME = "light_display_name"
 CONF_WEATHER_ENTITY = "weather_entity"
+CONF_HOST = "host"
+CONF_PORT = "port"
+CONF_SW_VERSION = "sw_version"
+CONF_MODEL = "model"
+CONF_SCREENSAVER_TIMEOUT = "screensaver_timeout_seconds"
+
+# mDNS/Zeroconf service type advertised by Nubly devices on the LAN.
+ZEROCONF_TYPE = "_nubly._tcp.local."
+
+DEFAULT_SCREENSAVER_TIMEOUT = 30
 
 # Nubly devices publish a retained JSON attributes message on this topic so HA
 # can discover their hardware-generated device_id (format: nubly_<12 hex chars>).

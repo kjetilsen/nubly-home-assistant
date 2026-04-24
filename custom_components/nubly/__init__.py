@@ -5,14 +5,19 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     CONF_DEVICE_ID,
     CONF_LIGHT_DISPLAY_NAME,
     CONF_LIGHT_ENTITY,
     CONF_MEDIA_ENTITY,
+    CONF_MODEL,
     CONF_ROOM_NAME,
+    CONF_SCREENSAVER_TIMEOUT,
+    CONF_SW_VERSION,
     CONF_WEATHER_ENTITY,
+    DEFAULT_SCREENSAVER_TIMEOUT,
     DOMAIN,
     LEGACY_DEVICE_ID,
 )
@@ -97,6 +102,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = data
 
+    device_id = data[CONF_DEVICE_ID]
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, device_id)},
+        manufacturer="Nubly",
+        name=data.get(CONF_ROOM_NAME) or device_id,
+        model=data.get(CONF_MODEL),
+        sw_version=data.get(CONF_SW_VERSION),
+    )
+
     try:
         await _publish_config(hass, data)
     except Exception:
@@ -131,7 +147,9 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
             "light_enabled": True,
             "clock_enabled": True,
         },
-        "screensaver_timeout_seconds": 30,
+        "screensaver_timeout_seconds": int(
+            data.get(CONF_SCREENSAVER_TIMEOUT, DEFAULT_SCREENSAVER_TIMEOUT)
+        ),
     }
 
     weather_entity = data.get(CONF_WEATHER_ENTITY)
