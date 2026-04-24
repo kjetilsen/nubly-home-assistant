@@ -6,6 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import (
     CONF_DEVICE_ID,
@@ -23,6 +24,7 @@ from .const import (
 )
 from .commands import async_subscribe_commands
 from .discovery import async_discover_devices
+from .view import NublyCoverArtView
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Nubly integration."""
     hass.data.setdefault(DOMAIN, {})
+    _register_cover_art_view(hass)
     return True
 
 
@@ -71,6 +74,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Nubly from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+    _register_cover_art_view(hass)
 
     data = dict(entry.data)
 
@@ -215,6 +219,8 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
     if weather_entity:
         payload["weather"] = {"entity_id": weather_entity}
 
+    payload["media"]["cover_art_url"] = _build_cover_art_url(hass, device_id)
+
     topic = f"nubly/devices/{device_id}/config"
     _LOGGER.warning("NUBLY HA: using HA MQTT integration = true")
     _LOGGER.warning("NUBLY HA: publishing config to topic = %s", topic)
@@ -237,6 +243,25 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
         return
 
     _LOGGER.warning("NUBLY HA: config publish ok")
+
+
+def _register_cover_art_view(hass: HomeAssistant) -> None:
+    """Register the cover-art view once, idempotently."""
+    flag_key = "_cover_art_view_registered"
+    if hass.data[DOMAIN].get(flag_key):
+        return
+    hass.http.register_view(NublyCoverArtView(hass))
+    hass.data[DOMAIN][flag_key] = True
+
+
+def _build_cover_art_url(hass: HomeAssistant, device_id: str) -> str:
+    """Return an absolute cover art URL if HA has one, else a relative path."""
+    path = f"/api/nubly/{device_id}/cover_art"
+    try:
+        base = get_url(hass, allow_internal=True, prefer_external=False)
+    except NoURLAvailableError:
+        return path
+    return f"{base.rstrip('/')}{path}"
 
 
 async def _clear_legacy_config(hass: HomeAssistant) -> None:
