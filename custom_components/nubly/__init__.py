@@ -14,7 +14,9 @@ from .const import (
     CONF_ROOM_NAME,
     CONF_WEATHER_ENTITY,
     DOMAIN,
+    LEGACY_DEVICE_ID,
 )
+from .discovery import async_discover_devices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +24,41 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Nubly integration."""
     hass.data.setdefault(DOMAIN, {})
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate a v1 entry to v2 (hardware device_id)."""
+    _LOGGER.info(
+        "NUBLY HA: migrating entry %s from version %s",
+        entry.entry_id,
+        entry.version,
+    )
+
+    if entry.version < 2:
+        new_data = dict(entry.data)
+
+        if new_data.get(CONF_DEVICE_ID) == LEGACY_DEVICE_ID:
+            _LOGGER.warning(
+                "NUBLY HA: legacy device_id %s found, attempting discovery",
+                LEGACY_DEVICE_ID,
+            )
+            found = await async_discover_devices(hass)
+            if found:
+                new_device_id = sorted(found)[0]
+                _LOGGER.info(
+                    "NUBLY HA: migrating device_id %s -> %s",
+                    LEGACY_DEVICE_ID,
+                    new_device_id,
+                )
+                new_data[CONF_DEVICE_ID] = new_device_id
+            else:
+                _LOGGER.warning(
+                    "NUBLY HA: no Nubly devices responded; keeping legacy id"
+                )
+
+        hass.config_entries.async_update_entry(entry, data=new_data, version=2)
+
     return True
 
 
@@ -68,13 +105,19 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
     if weather_entity:
         payload["weather"] = {"entity_id": weather_entity}
 
+    topic = f"nubly/devices/{device_id}/config"
+    _LOGGER.info("NUBLY HA: publishing config to topic = %s", topic)
+    _LOGGER.info("NUBLY HA: config payload = %s", payload)
+
     await hass.services.async_call(
         "mqtt",
         "publish",
         {
-            "topic": f"nubly/devices/{device_id}/config",
+            "topic": topic,
             "payload": json.dumps(payload),
             "qos": 0,
             "retain": True,
         },
     )
+
+    _LOGGER.info("NUBLY HA: config publish ok")

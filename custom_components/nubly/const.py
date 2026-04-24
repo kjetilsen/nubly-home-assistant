@@ -8,3 +8,14 @@ CONF_MEDIA_ENTITY = "media_entity"
 CONF_LIGHT_ENTITY = "light_entity"
 CONF_LIGHT_DISPLAY_NAME = "light_display_name"
 CONF_WEATHER_ENTITY = "weather_entity"
+
+# Nubly devices publish a retained status message on this topic so HA can
+# discover their hardware-generated device_id (format: nubly_<12 hex chars>).
+# Topic: nubly/devices/<device_id>/status
+DISCOVERY_SUB_TOPIC = "nubly/devices/+/status"
+
+# Seconds to listen for device announcements during a discovery round.
+DISCOVERY_TIMEOUT = 3.0
+
+# Hardcoded device_id used by the pre-hardware-ID version of this integration.
+LEGACY_DEVICE_ID = "nubly_gjesterom_display"
