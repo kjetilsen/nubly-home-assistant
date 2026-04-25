@@ -85,6 +85,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_check_provisioning_once(hass)
 
     data = dict(entry.data)
+    device_id = data.get(CONF_DEVICE_ID, "<unknown>")
+    _LOGGER.info("NUBLY HA: integration setup started for device_id = %s", device_id)
 
     try:
         if data.get(CONF_DEVICE_ID) == LEGACY_DEVICE_ID:
@@ -93,10 +95,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 LEGACY_DEVICE_ID,
             )
             discovered = await async_discover_devices(hass)
-            _LOGGER.warning("NUBLY HA: rediscovery returned %s", discovered)
+            _LOGGER.debug("NUBLY HA: rediscovery returned %s", discovered)
             if discovered:
                 new_device_id = sorted(discovered)[0]
-                _LOGGER.warning(
+                _LOGGER.info(
                     "NUBLY HA: updating device_id %s -> %s",
                     LEGACY_DEVICE_ID,
                     new_device_id,
@@ -129,7 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         unsub_commands = await async_subscribe_commands(hass, device_id)
         entry.async_on_unload(unsub_commands)
-        _LOGGER.warning(
+        _LOGGER.debug(
             "NUBLY HA: subscribed to commands for device_id = %s", device_id
         )
     except Exception:
@@ -145,7 +147,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception:
         _LOGGER.exception("NUBLY HA: legacy cleanup raised an exception")
 
-    _LOGGER.warning("NUBLY HA: async_setup_entry completed")
+    _LOGGER.info(
+        "NUBLY HA: integration setup completed for device_id = %s", device_id
+    )
     return True
 
 
@@ -158,14 +162,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Unprovision the device when its config entry is deleted."""
     device_id = entry.data.get(CONF_DEVICE_ID)
-    _LOGGER.warning(
+    _LOGGER.info(
         "NUBLY HA: removing config entry for device_id = %s", device_id
     )
     if not device_id:
         return
 
     config_topic = f"nubly/devices/{device_id}/config"
-    _LOGGER.warning(
+    _LOGGER.debug(
         "NUBLY HA: clearing retained config topic = %s", config_topic
     )
     try:
@@ -194,7 +198,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
                 "retain": False,
             },
         )
-        _LOGGER.warning("NUBLY HA: unprovision command sent")
+        _LOGGER.info("NUBLY HA: unprovision command sent")
     except Exception:
         _LOGGER.exception("NUBLY HA: failed to send unprovision command")
 
@@ -230,10 +234,8 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
     payload["media"]["cover_art_url"] = _build_cover_art_url(hass, device_id)
 
     topic = f"nubly/devices/{device_id}/config"
-    _LOGGER.warning("NUBLY HA: using HA MQTT integration = true")
-    _LOGGER.warning("NUBLY HA: publishing config to topic = %s", topic)
-    _LOGGER.warning("NUBLY HA: config payload = %s", payload)
-    _LOGGER.warning("NUBLY HA: publishing config retained = true")
+    _LOGGER.debug("NUBLY HA: publishing config to topic = %s", topic)
+    _LOGGER.debug("NUBLY HA: config payload = %s", payload)
 
     service_data = {
         "topic": topic,
@@ -243,7 +245,7 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
     }
 
     for attempt in range(1, _PUBLISH_MAX_ATTEMPTS + 1):
-        _LOGGER.warning(
+        _LOGGER.debug(
             "NUBLY HA: config publish attempt %s/%s",
             attempt,
             _PUBLISH_MAX_ATTEMPTS,
@@ -262,7 +264,7 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
             )
             return
         else:
-            _LOGGER.warning("NUBLY HA: config publish ok")
+            _LOGGER.debug("NUBLY HA: config publish ok")
             return
 
         if attempt < _PUBLISH_MAX_ATTEMPTS:
@@ -305,7 +307,7 @@ def _build_cover_art_url(hass: HomeAssistant, device_id: str) -> str:
 async def _clear_legacy_config(hass: HomeAssistant) -> None:
     """Remove the retained config at the old hardcoded legacy topic."""
     legacy_topic = f"nubly/devices/{LEGACY_DEVICE_ID}/config"
-    _LOGGER.warning("NUBLY HA: clearing legacy config topic = %s", legacy_topic)
+    _LOGGER.debug("NUBLY HA: clearing legacy config topic = %s", legacy_topic)
     await hass.services.async_call(
         "mqtt",
         "publish",

@@ -42,8 +42,12 @@ _LOGGER = logging.getLogger(__name__)
 CONFIGURE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ROOM_NAME): str,
-        vol.Required(CONF_MEDIA_ENTITY): str,
-        vol.Required(CONF_LIGHT_ENTITY): str,
+        vol.Required(CONF_MEDIA_ENTITY): EntitySelector(
+            EntitySelectorConfig(domain="media_player"),
+        ),
+        vol.Required(CONF_LIGHT_ENTITY): EntitySelector(
+            EntitySelectorConfig(domain="light"),
+        ),
         vol.Required(CONF_LIGHT_DISPLAY_NAME): str,
         vol.Optional(CONF_WEATHER_ENTITY): EntitySelector(
             EntitySelectorConfig(domain="weather"),
@@ -83,7 +87,7 @@ class NublyConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: ZeroconfServiceInfo
     ):
         """Handle a device announced via mDNS/zeroconf."""
-        _LOGGER.warning(
+        _LOGGER.debug(
             "NUBLY HA: async_step_zeroconf called name=%s type=%s host=%s port=%s",
             getattr(discovery_info, "name", None),
             getattr(discovery_info, "type", None),
@@ -106,8 +110,8 @@ class NublyConfigFlow(ConfigFlow, domain=DOMAIN):
         if not device_id:
             return self.async_abort(reason="missing_device_id")
 
-        _LOGGER.warning("NUBLY HA: zeroconf discovered device_id = %s", device_id)
-        _LOGGER.warning("NUBLY HA: discovery host = %s:%s", host, port)
+        _LOGGER.info("NUBLY HA: zeroconf discovered device_id = %s", device_id)
+        _LOGGER.debug("NUBLY HA: discovery host = %s:%s", host, port)
 
         await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured(
@@ -187,7 +191,7 @@ class NublyConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 data = {**self._discovery_fields, **user_input}
                 title = user_input.get(CONF_ROOM_NAME) or self._device_id
-                _LOGGER.warning(
+                _LOGGER.info(
                     "NUBLY HA: config entry created for device_id = %s",
                     self._device_id,
                 )

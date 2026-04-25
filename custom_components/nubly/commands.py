@@ -30,7 +30,7 @@ async def async_subscribe_commands(hass: HomeAssistant, device_id: str):
 
     @callback
     def on_message(msg) -> None:
-        _LOGGER.warning("NUBLY HA: command received topic = %s", msg.topic)
+        _LOGGER.debug("NUBLY HA: command received topic = %s", msg.topic)
 
         if not msg.topic.startswith(prefix):
             return
@@ -39,23 +39,22 @@ async def async_subscribe_commands(hass: HomeAssistant, device_id: str):
         payload = msg.payload
         if isinstance(payload, bytes):
             payload = payload.decode("utf-8", errors="replace")
-        _LOGGER.warning("NUBLY HA: command payload = %s", payload)
 
         try:
             data = json.loads(payload) if payload else {}
         except (json.JSONDecodeError, TypeError):
-            _LOGGER.warning(
-                "NUBLY HA: non-JSON command payload on %s: %r", msg.topic, payload
+            _LOGGER.debug(
+                "NUBLY HA: non-JSON command payload on %s", msg.topic
             )
             return
 
         if not isinstance(data, dict):
-            _LOGGER.warning("NUBLY HA: command payload must be a JSON object")
+            _LOGGER.debug("NUBLY HA: command payload must be a JSON object")
             return
 
         spec = _COMMAND_MAP.get(command)
         if spec is None:
-            _LOGGER.warning("NUBLY HA: unknown command %s", command)
+            _LOGGER.debug("NUBLY HA: unknown command %s", command)
             return
 
         domain, service, fields = spec
@@ -64,11 +63,8 @@ async def async_subscribe_commands(hass: HomeAssistant, device_id: str):
             _LOGGER.warning("NUBLY HA: missing entity_id for command %s", command)
             return
 
-        _LOGGER.warning(
-            "NUBLY HA: calling service = %s.%s data=%s",
-            domain,
-            service,
-            service_data,
+        _LOGGER.debug(
+            "NUBLY HA: calling service = %s.%s", domain, service
         )
         hass.async_create_task(
             _async_call_service(hass, domain, service, service_data)
@@ -87,4 +83,4 @@ async def _async_call_service(
             "NUBLY HA: command service call failed %s.%s", domain, service
         )
         return
-    _LOGGER.warning("NUBLY HA: command handled ok")
+    _LOGGER.debug("NUBLY HA: command handled ok")

@@ -29,19 +29,19 @@ class NublyCoverArtView(HomeAssistantView):
         self.hass = hass
 
     async def get(self, request: web.Request, device_id: str) -> web.Response:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "NUBLY HA: cover art requested for device_id = %s", device_id
         )
 
         entry = _find_entry_by_device_id(self.hass, device_id)
         if entry is None:
-            _LOGGER.warning("NUBLY HA: cover art HTTP status = 404 (unknown device)")
+            _LOGGER.debug("NUBLY HA: cover art HTTP status = 404 (unknown device)")
             return web.Response(status=404, text="unknown device")
 
         media_entity = entry.data.get(CONF_MEDIA_ENTITY)
-        _LOGGER.warning("NUBLY HA: media entity = %s", media_entity)
+        _LOGGER.debug("NUBLY HA: media entity = %s", media_entity)
         if not media_entity:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "NUBLY HA: cover art HTTP status = 404 (no media entity)"
             )
             return web.Response(status=404, text="no media entity configured")
@@ -50,8 +50,8 @@ class NublyCoverArtView(HomeAssistantView):
         attrs = state.attributes if state is not None else {}
         entity_picture = attrs.get("entity_picture")
         media_image_url = attrs.get("media_image_url")
-        _LOGGER.warning("NUBLY HA: entity_picture = %s", entity_picture)
-        _LOGGER.warning(
+        _LOGGER.debug("NUBLY HA: entity_picture = %s", entity_picture)
+        _LOGGER.debug(
             "NUBLY HA: resolved artwork url = %s",
             media_image_url or entity_picture,
         )
@@ -67,7 +67,7 @@ class NublyCoverArtView(HomeAssistantView):
         )
 
         if etag and request.headers.get("If-None-Match") == etag:
-            _LOGGER.warning("NUBLY HA: cover art HTTP status = 304 (not modified)")
+            _LOGGER.debug("NUBLY HA: cover art HTTP status = 304 (not modified)")
             return web.Response(status=304, headers={"ETag": etag})
 
         component = self.hass.data.get("media_player")
@@ -79,7 +79,7 @@ class NublyCoverArtView(HomeAssistantView):
 
         player = component.get_entity(media_entity)
         if player is None:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "NUBLY HA: cover art HTTP status = 404 (entity not found)"
             )
             return web.Response(status=404, text="entity not found")
@@ -91,7 +91,7 @@ class NublyCoverArtView(HomeAssistantView):
             return web.Response(status=502, text="fetch failed")
 
         if not image or not image[0]:
-            _LOGGER.warning("NUBLY HA: cover art HTTP status = 404 (no image)")
+            _LOGGER.debug("NUBLY HA: cover art HTTP status = 404 (no image)")
             return web.Response(status=404, text="no image")
 
         image_bytes, content_type = image
@@ -101,9 +101,9 @@ class NublyCoverArtView(HomeAssistantView):
         if etag:
             headers["ETag"] = etag
 
-        _LOGGER.warning("NUBLY HA: cover art HTTP status = 200")
-        _LOGGER.warning("NUBLY HA: response content type = %s", content_type)
-        _LOGGER.warning("NUBLY HA: response bytes = %d", len(image_bytes))
+        _LOGGER.debug("NUBLY HA: cover art HTTP status = 200")
+        _LOGGER.debug("NUBLY HA: response content type = %s", content_type)
+        _LOGGER.debug("NUBLY HA: response bytes = %d", len(image_bytes))
 
         return web.Response(
             body=image_bytes,

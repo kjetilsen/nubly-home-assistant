@@ -62,21 +62,17 @@ async def async_check_provisioning_support(hass: HomeAssistant) -> dict:
     """Probe Supervisor for Mosquitto add-on availability.
 
     Returns a dict: {"supervisor": bool, "mosquitto": bool, "supported": bool}.
-    Logs the conclusion. Never raises.
+    Logs at debug level. Never raises.
     """
     result = {"supervisor": False, "mosquitto": False, "supported": False}
 
     token = os.environ.get(SUPERVISOR_TOKEN_ENV)
     if not token:
-        _LOGGER.warning("NUBLY HA: supervisor detected = false")
-        _LOGGER.warning("NUBLY HA: mosquitto add-on detected = false")
-        _LOGGER.warning(
-            "NUBLY HA: Automatic MQTT provisioning is not supported yet"
-        )
+        _LOGGER.debug("NUBLY HA: supervisor detected = false")
         return result
 
     result["supervisor"] = True
-    _LOGGER.warning("NUBLY HA: supervisor detected = true")
+    _LOGGER.debug("NUBLY HA: supervisor detected = true")
 
     session = async_get_clientsession(hass)
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
@@ -101,24 +97,14 @@ async def async_check_provisioning_support(hass: HomeAssistant) -> dict:
                 )
     except Exception:
         _LOGGER.exception("NUBLY HA: supervisor probe failed")
-        _LOGGER.warning(
-            "NUBLY HA: Automatic MQTT provisioning is not supported yet"
-        )
         return result
 
-    _LOGGER.warning(
+    _LOGGER.debug(
         "NUBLY HA: mosquitto add-on detected = %s", result["mosquitto"]
     )
 
     if result["mosquitto"]:
         result["supported"] = True
-        _LOGGER.warning(
-            "NUBLY HA: automatic MQTT provisioning will be supported"
-        )
-    else:
-        _LOGGER.warning(
-            "NUBLY HA: Automatic MQTT provisioning is not supported yet"
-        )
 
     return result
 
@@ -127,13 +113,6 @@ async def async_provision_device(
     hass: HomeAssistant, host: str, device_id: str
 ) -> str | None:
     """Run the full onboarding provisioning flow.
-
-    Order of operations:
-      1. Generate credentials.
-      2. Add the user to the Mosquitto add-on options.
-      3. Restart Mosquitto (once).
-      4. Wait for HA's MQTT client to reconnect.
-      5. POST the credentials to the ESP32 /provision endpoint.
 
     Returns None on success, or a translation key for the failing step.
     """
@@ -146,19 +125,19 @@ async def async_provision_device(
 
     username = device_id if device_id.startswith("nubly_") else f"nubly_{device_id}"
     password = secrets.token_urlsafe(32)
-    _LOGGER.warning("NUBLY HA: generated MQTT username = %s", username)
+    _LOGGER.debug("NUBLY HA: generated MQTT username = %s", username)
 
     if not await _async_add_mosquitto_user(hass, token, username, password):
         return "mosquitto_user_add_failed"
 
-    _LOGGER.warning("NUBLY HA: restarting Mosquitto for credential provisioning")
+    _LOGGER.info("NUBLY HA: restarting Mosquitto for credential provisioning")
     if not await _async_restart_mosquitto(hass, token):
         return "mosquitto_restart_failed"
 
-    _LOGGER.warning("NUBLY HA: waiting for MQTT reconnect")
+    _LOGGER.debug("NUBLY HA: waiting for MQTT reconnect")
     if not await _async_wait_for_mqtt(hass):
         return "mqtt_reconnect_timeout"
-    _LOGGER.warning("NUBLY HA: MQTT reconnect signal received")
+    _LOGGER.debug("NUBLY HA: MQTT reconnect signal received")
 
     if not await _async_wait_for_publish_ready(hass, device_id):
         return "mqtt_publish_not_ready"
@@ -173,12 +152,10 @@ async def _async_wait_for_publish_ready(
     hass: HomeAssistant, device_id: str
 ) -> bool:
     """Confirm the MQTT client can actually publish, not just that it claims
-    to be connected. After a Mosquitto restart there is a brief window where
-    `async_wait_for_mqtt_client` returns but `mqtt.publish` still raises
-    HomeAssistantError ("client is not currently connected"). Loop a small
-    test publish until it succeeds or the timeout expires.
+    to be connected. Loop a small test publish until it succeeds or the
+    timeout expires.
     """
-    _LOGGER.warning("NUBLY HA: testing MQTT publish readiness")
+    _LOGGER.debug("NUBLY HA: testing MQTT publish readiness")
     topic = f"nubly/internal/{device_id}/mqtt_ready"
     deadline = asyncio.get_event_loop().time() + PUBLISH_READY_TIMEOUT_SECONDS
 
@@ -204,11 +181,11 @@ async def _async_wait_for_publish_ready(
                 "NUBLY HA: unexpected error during publish readiness check"
             )
         else:
-            _LOGGER.warning("NUBLY HA: MQTT publish readiness ok")
+            _LOGGER.debug("NUBLY HA: MQTT publish readiness ok")
             return True
 
         if asyncio.get_event_loop().time() >= deadline:
-            _LOGGER.warning(
+            _LOGGER.error(
                 "NUBLY HA: MQTT publish readiness timed out after %ss",
                 PUBLISH_READY_TIMEOUT_SECONDS,
             )
@@ -220,10 +197,7 @@ async def _async_wait_for_publish_ready(
 async def _async_add_mosquitto_user(
     hass: HomeAssistant, token: str, username: str, password: str
 ) -> bool:
-    """Append (or replace) a login in Mosquitto add-on options.
-
-    Returns True if Supervisor accepts the new options, False otherwise.
-    """
+    """Append (or replace) a login in Mosquitto add-on options."""
     session = async_get_clientsession(hass)
     headers = {"Authorization": f"Bearer {token}"}
     read_timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
@@ -270,7 +244,7 @@ async def _async_add_mosquitto_user(
         _LOGGER.exception("NUBLY HA: failed to update mosquitto options")
         return False
 
-    _LOGGER.warning("NUBLY HA: added MQTT user to Mosquitto")
+    _LOGGER.info("NUBLY HA: added MQTT user to Mosquitto")
     return True
 
 
@@ -297,7 +271,7 @@ async def _async_restart_mosquitto(hass: HomeAssistant, token: str) -> bool:
 async def _async_wait_for_mqtt(hass: HomeAssistant) -> bool:
     wait_fn = getattr(mqtt, "async_wait_for_mqtt_client", None)
     if wait_fn is None:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "NUBLY HA: async_wait_for_mqtt_client not available; sleeping briefly"
         )
         await asyncio.sleep(5)
@@ -327,7 +301,7 @@ async def _async_post_provision(
     password: str,
 ) -> bool:
     url = f"http://{host}:{PROVISION_PORT}/provision"
-    _LOGGER.warning("NUBLY HA: provisioning device at %s", url)
+    _LOGGER.info("NUBLY HA: provisioning device at %s", url)
 
     broker_host = await _async_resolve_provision_broker_host(hass)
     payload = {
@@ -337,21 +311,20 @@ async def _async_post_provision(
         "mqtt_password": password,
         "device_id": device_id,
     }
-    _LOGGER.warning(
+    _LOGGER.debug(
         "NUBLY HA: provisioning payload prepared for device_id = %s", device_id
     )
-    _LOGGER.warning("NUBLY HA: provisioning ESP32 mqtt_host = %s", broker_host)
 
     session = async_get_clientsession(hass)
     timeout = aiohttp.ClientTimeout(total=PROVISION_TIMEOUT_SECONDS)
 
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "NUBLY HA: provisioning response status = %s", resp.status
             )
             if resp.status == 200:
-                _LOGGER.warning("NUBLY HA: provisioning succeeded")
+                _LOGGER.info("NUBLY HA: provisioning succeeded")
                 return True
             _LOGGER.warning(
                 "NUBLY HA: provisioning failed (HTTP %s)", resp.status
@@ -376,22 +349,17 @@ def _get_broker_host(hass: HomeAssistant) -> str:
 
 
 async def _async_resolve_provision_broker_host(hass: HomeAssistant) -> str:
-    """Return a broker host the ESP32 can actually reach over the LAN.
-
-    HA may store its broker as `core-mosquitto` (Supervisor-internal Docker
-    DNS), which the ESP32 can't resolve. When that's the case, substitute
-    with HA's LAN IP, detected via the kernel's routing table.
-    """
+    """Return a broker host the ESP32 can actually reach over the LAN."""
     internal = _get_broker_host(hass)
-    _LOGGER.warning("NUBLY HA: MQTT broker internal host = %s", internal)
+    _LOGGER.debug("NUBLY HA: MQTT broker internal host = %s", internal)
 
     if internal.lower() not in _SUPERVISOR_INTERNAL_HOSTS:
-        _LOGGER.warning("NUBLY HA: MQTT broker provision host = %s", internal)
+        _LOGGER.info("NUBLY HA: MQTT broker provision host = %s", internal)
         return internal
 
     lan_ip = await _async_detect_lan_ip(hass)
     resolved = lan_ip or internal
-    _LOGGER.warning("NUBLY HA: MQTT broker provision host = %s", resolved)
+    _LOGGER.info("NUBLY HA: MQTT broker provision host = %s", resolved)
     return resolved
 
 
@@ -401,8 +369,6 @@ async def _async_detect_lan_ip(hass: HomeAssistant) -> str | None:
     def _sync() -> str | None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # No packet is sent — connect() on UDP only consults the routing
-            # table, so any reachable-looking target works offline too.
             sock.connect(("1.1.1.1", 80))
             return sock.getsockname()[0]
         except OSError:
