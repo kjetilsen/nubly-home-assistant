@@ -21,6 +21,7 @@ import aiohttp
 
 from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ SUPERVISOR_WRITE_TIMEOUT_SECONDS = 30
 PROVISION_PORT = 80
 PROVISION_TIMEOUT_SECONDS = 10
 MQTT_RECONNECT_TIMEOUT_SECONDS = 15
+PUBLISH_READY_TIMEOUT_SECONDS = 30
+PUBLISH_READY_INTERVAL_SECONDS = 1
 DEFAULT_BROKER_HOST = "homeassistant.local"
 DEFAULT_BROKER_PORT = 1883
 
@@ -155,12 +158,63 @@ async def async_provision_device(
     _LOGGER.warning("NUBLY HA: waiting for MQTT reconnect")
     if not await _async_wait_for_mqtt(hass):
         return "mqtt_reconnect_timeout"
-    _LOGGER.warning("NUBLY HA: MQTT reconnected")
+    _LOGGER.warning("NUBLY HA: MQTT reconnect signal received")
+
+    if not await _async_wait_for_publish_ready(hass, device_id):
+        return "mqtt_publish_not_ready"
 
     if not await _async_post_provision(hass, host, device_id, username, password):
         return "provisioning_failed"
 
     return None
+
+
+async def _async_wait_for_publish_ready(
+    hass: HomeAssistant, device_id: str
+) -> bool:
+    """Confirm the MQTT client can actually publish, not just that it claims
+    to be connected. After a Mosquitto restart there is a brief window where
+    `async_wait_for_mqtt_client` returns but `mqtt.publish` still raises
+    HomeAssistantError ("client is not currently connected"). Loop a small
+    test publish until it succeeds or the timeout expires.
+    """
+    _LOGGER.warning("NUBLY HA: testing MQTT publish readiness")
+    topic = f"nubly/internal/{device_id}/mqtt_ready"
+    deadline = asyncio.get_event_loop().time() + PUBLISH_READY_TIMEOUT_SECONDS
+
+    while True:
+        try:
+            await hass.services.async_call(
+                "mqtt",
+                "publish",
+                {
+                    "topic": topic,
+                    "payload": "1",
+                    "qos": 0,
+                    "retain": False,
+                },
+                blocking=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.debug(
+                "NUBLY HA: publish readiness check not ready: %s", err
+            )
+        except Exception:
+            _LOGGER.exception(
+                "NUBLY HA: unexpected error during publish readiness check"
+            )
+        else:
+            _LOGGER.warning("NUBLY HA: MQTT publish readiness ok")
+            return True
+
+        if asyncio.get_event_loop().time() >= deadline:
+            _LOGGER.warning(
+                "NUBLY HA: MQTT publish readiness timed out after %ss",
+                PUBLISH_READY_TIMEOUT_SECONDS,
+            )
+            return False
+
+        await asyncio.sleep(PUBLISH_READY_INTERVAL_SECONDS)
 
 
 async def _async_add_mosquitto_user(

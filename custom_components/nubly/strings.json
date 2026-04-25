@@ -10,6 +10,7 @@
       "mosquitto_user_add_failed": "Could not add the MQTT user to the Mosquitto add-on. Check Supervisor logs.",
       "mosquitto_restart_failed": "Could not restart the Mosquitto add-on. Check Supervisor logs.",
       "mqtt_reconnect_timeout": "MQTT did not reconnect after the Mosquitto restart. Try again in a moment.",
+      "mqtt_publish_not_ready": "MQTT reconnected but is not yet accepting publishes. Try again in a moment.",
       "provisioning_failed": "Could not provision the Nubly device — check that it is online and reachable on the network."
     },
     "step": {

@@ -1,10 +1,12 @@
 """The Nubly integration."""
 
+import asyncio
 import json
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
@@ -28,6 +30,9 @@ from .provisioning import async_check_provisioning_support
 from .view import NublyCoverArtView
 
 _LOGGER = logging.getLogger(__name__)
+
+_PUBLISH_MAX_ATTEMPTS = 5
+_PUBLISH_RETRY_DELAY_SECONDS = 2
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -230,22 +235,43 @@ async def _publish_config(hass: HomeAssistant, data: dict) -> None:
     _LOGGER.warning("NUBLY HA: config payload = %s", payload)
     _LOGGER.warning("NUBLY HA: publishing config retained = true")
 
-    try:
-        await hass.services.async_call(
-            "mqtt",
-            "publish",
-            {
-                "topic": topic,
-                "payload": json.dumps(payload),
-                "qos": 0,
-                "retain": True,
-            },
-        )
-    except Exception:
-        _LOGGER.exception("NUBLY HA: config publish failed")
-        return
+    service_data = {
+        "topic": topic,
+        "payload": json.dumps(payload),
+        "qos": 0,
+        "retain": True,
+    }
 
-    _LOGGER.warning("NUBLY HA: config publish ok")
+    for attempt in range(1, _PUBLISH_MAX_ATTEMPTS + 1):
+        _LOGGER.warning(
+            "NUBLY HA: config publish attempt %s/%s",
+            attempt,
+            _PUBLISH_MAX_ATTEMPTS,
+        )
+        try:
+            await hass.services.async_call(
+                "mqtt", "publish", service_data, blocking=True
+            )
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "NUBLY HA: config publish failed, retrying (%s)", err
+            )
+        except Exception:
+            _LOGGER.exception(
+                "NUBLY HA: config publish failed (unexpected error)"
+            )
+            return
+        else:
+            _LOGGER.warning("NUBLY HA: config publish ok")
+            return
+
+        if attempt < _PUBLISH_MAX_ATTEMPTS:
+            await asyncio.sleep(_PUBLISH_RETRY_DELAY_SECONDS)
+
+    _LOGGER.error(
+        "NUBLY HA: config publish failed after %s attempts — giving up",
+        _PUBLISH_MAX_ATTEMPTS,
+    )
 
 
 def _register_cover_art_view(hass: HomeAssistant) -> None:
