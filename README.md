@@ -37,18 +37,22 @@ Versioning follows [semantic versioning](https://semver.org/):
 
 ### Cutting a new release
 
-1. Bump `"version"` in [custom_components/nubly/manifest.json](custom_components/nubly/manifest.json).
-2. Commit the change to `main`: `git commit -am "Release vX.Y.Z"`.
-3. Tag the commit and push the tag:
-   ```sh
-   git tag vX.Y.Z
-   git push origin main --tags
-   ```
-4. On GitHub, open **Releases → Draft a new release**, pick the `vX.Y.Z` tag,
-   write release notes, and publish.
-5. Within a few minutes HACS will show an update available on every instance
-   that installed this integration. Users click **Update** in HACS and restart
-   Home Assistant to pick up the new version.
+Use the release script:
+
+```sh
+./scripts/release.sh 0.1.1
+git push
+git push --tags
+```
+
+The script bumps `version` in [custom_components/nubly/manifest.json](custom_components/nubly/manifest.json),
+commits as `chore: release v<version>`, and creates the `v<version>` tag.
+Pushing the tag triggers [.github/workflows/release.yml](.github/workflows/release.yml),
+which verifies the manifest version matches the tag and creates a GitHub Release
+with auto-generated notes from the commits since the previous tag.
+
+Within a few minutes HACS picks up the new GitHub Release and shows "Update
+available" to users.
 
 ### How HACS detects the version
 

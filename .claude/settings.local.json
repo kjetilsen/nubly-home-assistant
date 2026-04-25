@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x \"/Users/kjetillangerud/Documents/Dokumenter – Kjetil sin MacBook Pro/GitHub/nubly-home-assistant/scripts/release.sh\")"
+    ]
+  }
+}
