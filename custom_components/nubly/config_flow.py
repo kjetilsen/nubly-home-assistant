@@ -34,6 +34,7 @@ from .const import (
     DOMAIN,
 )
 from .discovery import async_discover_devices
+from .provisioning import async_provision_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,21 +169,33 @@ class NublyConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_configure(self, user_input=None):
         """Collect room, entities, weather and screensaver timeout."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             if self.unique_id is None and self._device_id:
                 await self.async_set_unique_id(self._device_id)
                 self._abort_if_unique_id_configured()
 
-            data = {**self._discovery_fields, **user_input}
-            title = user_input.get(CONF_ROOM_NAME) or self._device_id
-            _LOGGER.warning(
-                "NUBLY HA: config entry created for device_id = %s",
-                self._device_id,
-            )
-            return self.async_create_entry(title=title, data=data)
+            host = self._discovery_fields.get(CONF_HOST)
+            if host and self._device_id:
+                ok = await async_provision_device(
+                    self.hass, host, self._device_id
+                )
+                if not ok:
+                    errors["base"] = "provisioning_failed"
+
+            if not errors:
+                data = {**self._discovery_fields, **user_input}
+                title = user_input.get(CONF_ROOM_NAME) or self._device_id
+                _LOGGER.warning(
+                    "NUBLY HA: config entry created for device_id = %s",
+                    self._device_id,
+                )
+                return self.async_create_entry(title=title, data=data)
 
         return self.async_show_form(
             step_id="configure",
             data_schema=CONFIGURE_SCHEMA,
             description_placeholders={"device_id": self._device_id or ""},
+            errors=errors,
         )

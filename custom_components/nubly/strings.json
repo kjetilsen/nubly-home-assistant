@@ -5,6 +5,9 @@
       "missing_device_id": "Discovered device did not advertise a device_id.",
       "already_configured": "This Nubly device is already configured."
     },
+    "error": {
+      "provisioning_failed": "Could not provision the Nubly device — check that it is online and reachable on the network."
+    },
     "step": {
       "configure": {
         "title": "Configure Nubly",
